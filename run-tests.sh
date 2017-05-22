@@ -79,7 +79,7 @@ run_test() (
 init() {
     [ -z "${script_file+x}" ] && [ -z "${res_dir+x}" ] && [ -z "${GIT_EXEC_PATH+x}" ] && [ -z "${sync_subcmd+x}" ] || exit 3
     [ $# -eq 2 ] || { error "usage: $0 <git-sync script> <resources directory>"; return 1; }
-    script_file="$(greadlink -e "$1" 2>/dev/null)" || res_dir="$(readlink -e "$1" 2>/dev/null)" || { error "fatal: could not canonicalize $1"; return 1; }
+    script_file="$(greadlink -e "$1" 2>/dev/null)" || script_file="$(readlink -e "$1" 2>/dev/null)" || { error "fatal: could not canonicalize $1"; return 1; }
     res_dir="$(greadlink -e "$2" 2>/dev/null)" || res_dir="$(readlink -e "$2" 2>/dev/null)" || { error "fatal: could not canonicalize $2"; return 1; }
     readonly script_file res_dir
 
