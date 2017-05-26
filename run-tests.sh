@@ -218,11 +218,11 @@ test_usage_safeguards_batch_3() (
     }
     setup() {
         derive_shared_state
-        git clone "${res_dir}/simple.bundle" "${__tusb3_repo_dir}" &&
+        git clone "${res_dir}/usage-safeguards/batch-3.bundle" "${__tusb3_repo_dir}" &&
         git -C "${__tusb3_repo_dir}" remote add funky-but-valid/a\"\$\'.b /dev/null &&
-        git -C "${__tusb3_repo_dir}" update-ref --stdin <<'EOF'
-create refs/sync/interferer 93550940d4ab9b0906f527c308233cc53d7b9981
-EOF
+        git -C "${__tusb3_repo_dir}" update-ref 'refs/sync/interferer' 'b04eff23e104aca9a0ad5453337c7fa5ded8981d' '' &&
+        git -C "${__tusb3_repo_dir}" pack-refs --all &&
+        rm -rf "${__tusb3_repo_dir}/.git/refs/sync"
     }
     exercise() {
         derive_shared_state
@@ -250,7 +250,9 @@ test_usage_safeguards_batch_4() (
         derive_shared_state
         git init "${__tusb4_repo_dir}" &&
         git -C "${__tusb4_repo_dir}" remote add custom /dev/null &&
-        git -C "${__tusb4_repo_dir}" config --add 'remote.custom.fetch' '+refs/notes/*:refs/notes/*'
+        git -C "${__tusb4_repo_dir}" config --add 'remote.custom.fetch' '+refs/notes/*:refs/notes/*' &&
+        mkdir -p "${__tusb4_repo_dir}/.git/refs/sync/local/heads/contrived" &&
+        touch "${__tusb4_repo_dir}/.git/refs/sync/local/heads/contrived/interferer"
     }
     exercise() {
         derive_shared_state
@@ -260,6 +262,7 @@ test_usage_safeguards_batch_4() (
         derive_shared_state
         diff -U 3 - "${__tusb4_invocation_log_file}" <<'EOF'
 fatal: 'custom' has a non-default fetch refspec configured
+fatal: refs/sync/ is not empty
 EOF
     }
     run_test 'usage safeguards: batch #4' setup exercise verify

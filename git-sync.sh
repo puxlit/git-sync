@@ -56,6 +56,8 @@ check_sanity() {
         if git check-ref-format "refs/remotes/${remote_name}"; then
             if git config --get "remote.${remote_name}.url" >/dev/null; then
                 # Ensure that remote is configured with a stock standard fetch refspec.
+                #
+                # TODO: Support common non-branch refspecs (like `+refs/tags/*:refs/tags/*` and `+refs/notes/*:refs/notes/*`), and arbitrary well-namespaced branch refspecs (like `+refs/heads/some/subset/*:refs/remotes/${remote_name}/*`).
                 [ "$(git config --get-all "remote.${remote_name}.fetch" | grep -Fcvx "+refs/heads/*:refs/remotes/${remote_name}/*")" -eq 0 ] || { error "fatal: '${remote_name}' has a non-default fetch refspec configured"; __cs_exit_status=1; }
             else error "fatal: '${remote_name}' is not a named remote"; __cs_exit_status=1; fi
         else error "fatal: '${remote_name}' is not a valid remote name"; __cs_exit_status=1; fi
@@ -65,13 +67,12 @@ check_sanity() {
 
         # TODO: Ensure there's no rebase in progress.
 
-        # Ensure our sync refs namespace is empty.
-        # Ideally, this means the last component of the path to our sync refs namespace (which we resolved earlier) doesn't exist.
-        # If it _does_ exist, it had better be a directory, and there had better be no refs inside.
-        # (We can test that last part by seeing if we can enumerate at least one ref inside our sync refs namespace.)
-        [ ! -e "${sync_refs_dir}" ] ||
-        ( [ -d "${sync_refs_dir}" ] && [ "$(git for-each-ref --count=1 "${sync_refs_namespace}" | wc -l)" -eq 0 ] ) ||
-        { error "fatal: ${sync_refs_namespace} is not empty"; __cs_exit_status=1; }
+        # Ensure our sync refs namespace is empty, by checking for valid (packed or loose) refs, then invalid loose refs.
+        { [ "$(git for-each-ref --count=1 "${sync_refs_namespace}" 2>/dev/null | wc -l)" -eq 0 ] && {
+            [ ! -e "${sync_refs_dir}" ] || {
+                [ -d "${sync_refs_dir}" ] && [ "$(find "${sync_refs_dir}" ! -type d | head -n 1 | wc -l)" -eq 0 ]
+            }
+        } } || { error "fatal: ${sync_refs_namespace} is not empty"; __cs_exit_status=1; }
 
         return ${__cs_exit_status}
     )
