@@ -66,7 +66,7 @@ run_test() (
     else
         __rt_log_phase() { tee -a "${rt_log_file}" || __rt_panic_over_untouchable_log_file; }
     fi
-    printf '>>>>>>>> test > %-72s [%5s]\n' "${__rt_name}" "${__rt_result}" | tee -a "${rt_log_file}" || __rt_panic_over_untouchable_log_file
+    printf '>>>>>>>> test > %-83s [%5s]\n' "${__rt_name}" "${__rt_result}" | tee -a "${rt_log_file}" || __rt_panic_over_untouchable_log_file
     sed 's/^/        setup > /' "${__rt_setup_log_file}" | __rt_log_phase
     sed 's/^/     exercise > /' "${__rt_exercise_log_file}" | __rt_log_phase
     sed 's/^/       verify > /' "${__rt_verify_log_file}" | __rt_log_phase
@@ -218,7 +218,7 @@ test_usage_safeguards_batch_3() (
     }
     setup() {
         derive_shared_state
-        git clone "${res_dir}/usage-safeguards/batch-3.bundle" "${__tusb3_repo_dir}" &&
+        git clone "${res_dir}/prototypal-repos/[br0->c00].bundle" "${__tusb3_repo_dir}" &&
         git -C "${__tusb3_repo_dir}" remote add funky-but-valid/a\"\$\'.b /dev/null &&
         git -C "${__tusb3_repo_dir}" update-ref 'refs/sync/interferer' 'b04eff23e104aca9a0ad5453337c7fa5ded8981d' '' &&
         git -C "${__tusb3_repo_dir}" pack-refs --all &&
@@ -274,5 +274,55 @@ test_usage_safeguards() {
     eager_and test_usage_safeguards_help test_usage_safeguards_nonrepo test_usage_safeguards_batch_1 test_usage_safeguards_batch_2 test_usage_safeguards_batch_3 test_usage_safeguards_batch_4
 }
 
+test_reconciliation_subscenario() (
+    [ -n "${res_dir+x}" ] && [ -n "${sync_subcmd+x}" ] || exit 3
+    [ -z "${__trs_dir+x}" ] && [ -z "${__trs_name+x}" ] && [ -z "${__trs_before_bundle_file+x}" ] && [ -z "${__trs_local_bundle_file+x}" ] && [ -z "${__trs_branches_to_checkout_file+x}" ] && [ -z "${__trs_refs_to_protect_file+x}" ] && [ -z "${__trs_after_bundle_file+x}" ] && [ -z "${__trs_expected_refs_file+x}" ] && [ -z "${__trs_repo_dir+x}" ] && [ -z "${__trs_actual_refs_file+x}" ] && [ -z "${__trs_branch_to_checkout+x}" ] && [ -z "${__trs_ref_to_protect+x}" ] || exit 3
+    [ $# -eq 2 ] || exit 3
+    readonly __trs_dir="${res_dir}/reconciliation-scenarios/$1" __trs_name="$2"
+
+    readonly __trs_before_bundle_file="${__trs_dir}/before.bundle" __trs_local_bundle_file="${res_dir}/prototypal-repos/local.bundle" __trs_branches_to_checkout_file="${__trs_dir}/branches_to_checkout.txt" __trs_refs_to_protect_file="${__trs_dir}/refs_to_protect.txt" __trs_after_bundle_file="${__trs_dir}/after.bundle" __trs_expected_refs_file="${__trs_dir}/expected_refs.txt"
+
+    derive_shared_state() {
+        # shellcheck disable=SC2031
+        readonly __trs_repo_dir="${__rt_temp_dir}/repo" __trs_actual_refs_file="${__rt_temp_dir}/actual_refs.txt"
+    }
+    setup() {
+        derive_shared_state
+        git clone "${__trs_before_bundle_file}" "${__trs_repo_dir}" &&
+        git -C "${__trs_repo_dir}" fetch "${__trs_local_bundle_file}" 'refs/*:refs/*' && {
+            while IFS='' read -r __trs_branch_to_checkout; do
+                git -C "${__trs_repo_dir}" checkout "${__trs_branch_to_checkout}" || return 1
+            done <"${__trs_branches_to_checkout_file}" || { error 'fatal: test_reconciliation_subscenario: failed to read branches-to-checkout file'; exit 2; }
+        } && {
+            while IFS='' read -r __trs_ref_to_protect; do
+                git -C "${__trs_repo_dir}" config --bool "${__trs_ref_to_protect}.protectFromSync" true || return 1
+            done <"${__trs_refs_to_protect_file}" || { error 'fatal: test_reconciliation_subscenario: failed to read refs-to-protect file'; exit 2; }
+        } &&
+        git -C "${__trs_repo_dir}" remote set-url origin "${__trs_after_bundle_file}"
+    }
+    exercise() {
+        derive_shared_state
+        echo 'y' | git -C "${__trs_repo_dir}" "${sync_subcmd}" origin
+    }
+    verify() {
+        derive_shared_state
+        git -C "${__trs_repo_dir}" show-ref | sort -k 2 >"${__trs_actual_refs_file}" &&
+        diff -U 3 "${__trs_expected_refs_file}" "${__trs_actual_refs_file}"
+    }
+    run_test "reconciliation: ${__trs_name}" setup exercise verify
+)
+
+test_reconciliation() (
+    [ -n "${res_dir+x}" ] || exit 3
+    [ -z "${__tr_exit_status+x}" ] && [ -z "${__tr_scenario_id+x}" ] && [ -z "${__tr_scenario_name+x}" ] || exit 3
+    [ $# -eq 0 ] || exit 3
+
+    __tr_exit_status=0
+    while IFS=': ' read -r __tr_scenario_id __tr_scenario_name; do
+        test_reconciliation_subscenario "${__tr_scenario_id}" "${__tr_scenario_name}" || __tr_exit_status=1
+    done <"${res_dir}/reconciliation-scenarios/manifest.txt" || { error 'fatal: test_reconciliation: failed to read manifest file'; exit 2; }
+    return ${__tr_exit_status}
+)
+
 # Do it.
-init "$@" && lint && test_usage_safeguards
+init "$@" && lint && test_usage_safeguards && test_reconciliation
