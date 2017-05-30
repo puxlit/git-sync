@@ -119,12 +119,24 @@ fetch_from_remote() {
 
 reconcile() {
     [ -n "${sync_refs_namespace+x}" ] && [ -n "${remote_name+x}" ] || exit 3
+    [ -z "${__r_local_branch+x}" ] || exit 3
     [ $# -eq 0 ] || exit 3
+
+    # Stage the reconciliation into our combined sync refs namespace.
+    (
+        for __r_local_branch in $(git for-each-ref --format='%(refname:lstrip=2)' 'refs/heads/'); do
+            if git show-ref --quiet --verify "${sync_refs_namespace}remote/heads/${__r_local_branch}"; then
+                echo "${sync_refs_namespace}remote/heads/${__r_local_branch}:${sync_refs_namespace}combined/heads/${__r_local_branch}"
+            fi
+        done
+        echo "${sync_refs_namespace}remote/tags/*:${sync_refs_namespace}combined/tags/*"
+    ) | xargs git fetch --quiet .
+    git fetch --quiet . "+${sync_refs_namespace}local/heads/*:${sync_refs_namespace}combined/heads/*" "+${sync_refs_namespace}local/tags/*:${sync_refs_namespace}combined/tags/*"
 
     # Summarise updates to local branches and tags, then prompt for whether we should proceed.
     #
     # TODO: Only prompt if destructive updates are implicated.
-    git fetch --dry-run --update-head-ok --prune . "${sync_refs_namespace}local/heads/*:refs/heads/*" "${sync_refs_namespace}local/tags/*:refs/tags/*" "+${sync_refs_namespace}remote/heads/*:refs/heads/*" "+${sync_refs_namespace}remote/tags/*:refs/tags/*"
+    git fetch --dry-run --update-head-ok --prune . "+${sync_refs_namespace}combined/heads/*:refs/heads/*" "+${sync_refs_namespace}combined/tags/*:refs/tags/*"
     yesno 'Continue [y,n]? ' || return 1
 
     # Update remote-tracking branches, then update local branches and tags.
@@ -134,7 +146,7 @@ reconcile() {
     #
     # TODO: Instead of fetching with `--update-head-ok` then resetting the index and working tree, consider saving our current branch (if applicable, with `git symbolic-ref --short HEAD`), detaching HEAD (with `git checkout --detach`), performing our updates, then checking out our saved current branch (if applicable).
     git fetch --update-head-ok --prune . "+${sync_refs_namespace}remote/heads/*:refs/remotes/${remote_name}/*"
-    git fetch --update-head-ok --prune --no-tags . "${sync_refs_namespace}local/heads/*:refs/heads/*" "${sync_refs_namespace}local/tags/*:refs/tags/*" "+${sync_refs_namespace}remote/heads/*:refs/heads/*" "+${sync_refs_namespace}remote/tags/*:refs/tags/*"
+    git fetch --update-head-ok --prune --no-tags . "+${sync_refs_namespace}combined/heads/*:refs/heads/*" "+${sync_refs_namespace}combined/tags/*:refs/tags/*"
     git reset --hard
 }
 
