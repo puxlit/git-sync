@@ -124,7 +124,7 @@ reconcile() {
 
     # Stage the reconciliation into our combined sync refs namespace.
     (
-        for __r_local_branch in $(git for-each-ref --format='%(refname:lstrip=2)' 'refs/heads/'); do
+        for __r_local_branch in $(git for-each-ref --format='%(refname:strip=2)' 'refs/heads/'); do
             if git show-ref --quiet --verify "${sync_refs_namespace}remote/heads/${__r_local_branch}"; then
                 echo "${sync_refs_namespace}remote/heads/${__r_local_branch}:${sync_refs_namespace}combined/heads/${__r_local_branch}"
             fi
