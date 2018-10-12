@@ -141,7 +141,7 @@ test_usage_safeguards_nonrepo() (
     verify() {
         derive_shared_state
         diff -U 3 - "${__tusn_invocation_log_file}" <<'EOF'
-fatal: Not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
 EOF
     }
     run_test 'usage safeguards: non-repo' setup exercise verify
